@@ -1,0 +1,72 @@
+// allocating the motor driver connections to the arduino pins
+
+int RIGHT_SPEED = 9;
+int RIGHT_F = 14;
+int RIGHT_R = 15;
+
+int LEFT_SPEED = 10;
+int LEFT_F = 16;
+int LEFT_R = 17;
+
+void setup() {
+
+  Serial.begin(9600);
+  Serial.println("Setting pins for our motors");
+
+// Setting all the pins as outputs
+  pinMode(RIGHT_SPEED, OUTPUT);
+  pinMode(RIGHT_F, OUTPUT);
+  pinMode(RIGHT_R, OUTPUT);
+
+  pinMode(LEFT_SPEED, OUTPUT);
+  pinMode(LEFT_F, OUTPUT);
+  pinMode(LEFT_R, OUTPUT);
+}
+
+void driveForward() {
+  Serial.println("Driving Forward");
+  digitalWrite(RIGHT_F, HIGH);
+  digitalWrite(RIGHT_R, LOW);
+  digitalWrite(LEFT_F, HIGH);
+  digitalWrite(LEFT_R, LOW);
+
+  analogWrite(RIGHT_SPEED, 200);
+  analogWrite(LEFT_SPEED, 200);
+}
+
+void driveBackward() {
+  digitalWrite(RIGHT_F, LOW);
+  digitalWrite(RIGHT_R, HIGH);
+  digitalWrite(LEFT_F, LOW);
+  digitalWrite(LEFT_R, HIGH);
+
+  analogWrite(RIGHT_SPEED, 200);
+  analogWrite(LEFT_SPEED, 200);
+}
+
+void driveRight() {
+  digitalWrite(LEFT_F, HIGH);
+  digitalWrite(LEFT_R, LOW);
+  digitalWrite(RIGHT_F, LOW);
+  digitalWrite(RIGHT_R, LOW);
+
+  analogWrite(LEFT_SPEED, 200);
+  analogWrite(RIGHT_SPEED, 0);
+}
+
+void driveLeft() {
+  digitalWrite(LEFT_F, LOW);
+  digitalWrite(LEFT_R, LOW);
+  digitalWrite(RIGHT_F, HIGH);
+  digitalWrite(RIGHT_R, LOW);
+
+  analogWrite(LEFT_SPEED, 0);
+  analogWrite(RIGHT_SPEED, 200);
+}
+
+void loop() {
+  driveForward();
+  delay(5000);
+  driveRight();
+  delay(2000);
+}
