@@ -1,0 +1,157 @@
+// Motor driver pins
+int RIGHT_SPEED = 9;
+int RIGHT_F = 14;
+int RIGHT_R = 15;
+
+int LEFT_SPEED = 10;
+int LEFT_F = 16;
+int LEFT_R = 17;
+
+// Sensor pins (placeholders - adjust to your actual sensors)
+int EDGE_SENSOR_LEFT = A0;   // e.g. IR reflectance, HIGH/high value = white line/edge
+int EDGE_SENSOR_RIGHT = A1;
+int DIST_SENSOR_FRONT = A2;  // e.g. IR or ultrasonic distance sensor
+
+int EDGE_THRESHOLD = 500;     // tune based on your sensor + surface
+int OPPONENT_RANGE = 300;     // tune: sensor reading that means "opponent detected"
+
+// State machine states
+enum RobotState { SEARCHING, ATTACKING, AVOIDING_EDGE };
+RobotState currentState = SEARCHING;
+
+// Non-blocking timing
+unsigned long lastActionTime = 0;
+unsigned long lastMoveTime = 0;       // tracks compliance with "move every 5s" rule
+const unsigned long MAX_IDLE_TIME = 4000;  // force a move before hitting 5s limit
+const unsigned long SCAN_PULSE_TIME = 300; // how long each scan pivot lasts
+const unsigned long EDGE_BACKUP_TIME = 400;
+const unsigned long EDGE_TURN_TIME = 500;
+
+unsigned long stateStartTime = 0;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(RIGHT_SPEED, OUTPUT);
+  pinMode(RIGHT_F, OUTPUT);
+  pinMode(RIGHT_R, OUTPUT);
+  pinMode(LEFT_SPEED, OUTPUT);
+  pinMode(LEFT_F, OUTPUT);
+  pinMode(LEFT_R, OUTPUT);
+
+  lastMoveTime = millis();
+  stateStartTime = millis();
+}
+
+void driveForward(int speed = 200) {
+  digitalWrite(RIGHT_F, HIGH);
+  digitalWrite(RIGHT_R, LOW);
+  digitalWrite(LEFT_F, HIGH);
+  digitalWrite(LEFT_R, LOW);
+  analogWrite(RIGHT_SPEED, speed);
+  analogWrite(LEFT_SPEED, speed);
+  lastMoveTime = millis();
+}
+
+void driveBackward(int speed = 200) {
+  digitalWrite(RIGHT_F, LOW);
+  digitalWrite(RIGHT_R, HIGH);
+  digitalWrite(LEFT_F, LOW);
+  digitalWrite(LEFT_R, HIGH);
+  analogWrite(RIGHT_SPEED, speed);
+  analogWrite(LEFT_SPEED, speed);
+  lastMoveTime = millis();
+}
+
+void pivotRight(int speed = 180) {
+  digitalWrite(LEFT_F, HIGH);
+  digitalWrite(LEFT_R, LOW);
+  digitalWrite(RIGHT_F, LOW);
+  digitalWrite(RIGHT_R, HIGH);
+  analogWrite(LEFT_SPEED, speed);
+  analogWrite(RIGHT_SPEED, speed);
+  lastMoveTime = millis();
+}
+
+void pivotLeft(int speed = 180) {
+  digitalWrite(LEFT_F, LOW);
+  digitalWrite(LEFT_R, HIGH);
+  digitalWrite(RIGHT_F, HIGH);
+  digitalWrite(RIGHT_R, LOW);
+  analogWrite(LEFT_SPEED, speed);
+  analogWrite(RIGHT_SPEED, speed);
+  lastMoveTime = millis();
+}
+
+void stopMotors() {
+  analogWrite(RIGHT_SPEED, 0);
+  analogWrite(LEFT_SPEED, 0);
+}
+
+bool edgeDetected() {
+  return analogRead(EDGE_SENSOR_LEFT) > EDGE_THRESHOLD ||
+         analogRead(EDGE_SENSOR_RIGHT) > EDGE_THRESHOLD;
+}
+
+bool opponentDetected() {
+  return analogRead(DIST_SENSOR_FRONT) > OPPONENT_RANGE;
+}
+
+void changeState(RobotState newState) {
+  currentState = newState;
+  stateStartTime = millis();
+}
+
+void loop() {
+  unsigned long now = millis();
+
+  // Edge detection overrides everything else - safety first
+  if (edgeDetected() && currentState != AVOIDING_EDGE) {
+    changeState(AVOIDING_EDGE);
+  }
+
+  switch (currentState) {
+
+    case SEARCHING: {
+      if (opponentDetected()) {
+        changeState(ATTACKING);
+        break;
+      }
+      // Pulse-turn to scan around without spinning blindly forever
+      if (now - stateStartTime < SCAN_PULSE_TIME) {
+        pivotRight(150);
+      } else {
+        stopMotors();
+        if (now - stateStartTime > SCAN_PULSE_TIME + 200) {
+          stateStartTime = now; // restart scan pulse cycle
+        }
+      }
+      break;
+    }
+
+    case ATTACKING: {
+      if (!opponentDetected()) {
+        changeState(SEARCHING);
+        break;
+      }
+      driveForward(255); // full speed push
+      break;
+    }
+
+    case AVOIDING_EDGE: {
+      unsigned long elapsed = now - stateStartTime;
+      if (elapsed < EDGE_BACKUP_TIME) {
+        driveBackward(200);
+      } else if (elapsed < EDGE_BACKUP_TIME + EDGE_TURN_TIME) {
+        pivotLeft(180);
+      } else {
+        changeState(SEARCHING);
+      }
+      break;
+    }
+  }
+
+  // Safety net: guarantee compliance with "must move every 5 seconds" rule
+  if (now - lastMoveTime > MAX_IDLE_TIME) {
+    pivotRight(150); // forces a move even if no other state action triggered one
+  }
+}
